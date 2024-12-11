@@ -1,0 +1,98 @@
+clc;close all;clear all;
+% Check for different SNR values.
+SNR=-22; 
+% # of reflecting elements in IRS.
+N=64; 
+% # of antennas at the receiver.
+Nr=2; 
+% # of constellation sets.
+const_sets=2;  
+% Modulation Order.
+M=4;   
+% Bits Per Channel Use at each time instant.
+eta=log2(Nr)+log2(const_sets)+log2(M); 
+% Total # of bits in simulation.
+total_bits=eta*6e4; 
+% Bit sequence for each time instant.
+bit_seq=randi(2,1,total_bits)-1; 
+% Noise Variance
+sigma=sqrt((1)/(2*(10^(SNR/10)))); 
+%Initialization of estimated bits.
+est_bits=zeros(1,total_bits);
+j=1;
+%%%%%%%%%%%%%%Constellation Sets for DM-SM%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ss_qpsk_DM=[-0.7071+0.7071i  -0.7071-0.7071i   0.7071+0.7071i   0.7071-0.7071i ...
+            -2.121+2.121*1i  -2.121-2.121*1i   2.121+2.121*1i   2.121-2.121*1i];
+ss_qpsk=[-0.7071+0.7071i  -0.7071-0.7071i   0.7071+0.7071i   0.7071-0.7071i; ...
+         -2.121+2.121*1i  -2.121-2.121*1i   2.121+2.121*1i   2.121-2.121*1i];
+est_ant_Idx_bits=[0;1];
+est_const_Idx_symb_bits=[0,0,0;0,0,1;0,1,0;0,1,1;1,0,0;1,0,1;1,1,0;1,1,1];
+for Iter=1:total_bits/eta
+   % Bits for each time instant.
+   Bits=bit_seq(j:j+eta-1);
+   % Antenna Index Selection
+   Ant_Idx=sum(Bits(1:log2(Nr)).*[2.^(log2(Nr)-1:-1:0)])+1;
+   % selected Rx antenna index
+   Sel_Ant_Idx=Ant_Idx; 
+   % Constellation Set Index Selection.
+   Sel_Const_Set_Idx=Bits(log2(Nr)+log2(const_sets).*[2.^(log2(const_sets)-1:-1:0)])+1;
+   % Index of the Symbol selected from the corresponding constellation Set.
+   sel_symb_Idx=sum(Bits(log2(Nr)+log2(const_sets)+1:end).*[2.^(log2(M)-1:-1:0)])+1;
+   % Selected Constellation Set.
+   Sel_Const_Set=ss_qpsk(Sel_Const_Set_Idx,:);
+    % Selected symbol from the corresponding Constellation Set.
+   Sel_symbol=Sel_Const_Set(sel_symb_Idx); 
+   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%%%%%%Generate Nakagami -m Channel.%%%%%%%%%%%%%%%%%%%%%%
+   % Parameters
+m=1;
+omega = 1;                  % Average power (scale parameter)
+% % Generate Nakagami-m fading samples
+% % Generate Rayleigh distributed random variables
+% Parameters
+m = 0.5;                % Nakagami-m fading parameter
+Omega = 1;            % Average power
+% Generate Nakagami-m fading channel
+h_amplitude = sqrt(gamrnd(m, Omega / m, [N, Nr])); % Gamma-distributed amplitudes
+random_phase = exp(1j * 2 * pi * rand(N, Nr));     % Uniform random phases
+% Complex Nakagami-m fading channel
+h = h_amplitude .* random_phase;
+% Channels between Destination and RIS
+% h=(randn(N,Nr)+1i*randn(N,Nr))/sqrt(2);
+%Phases Determination by the selected Rx antenna index. 
+Phi=diag(exp(-1i*angle(h(:,Sel_Ant_Idx)))); 
+%AWGN Noise at the receiver.
+   w_k=(sigma).*(randn(1,Nr) + 1i*randn(1,Nr));
+   %The channel after IRS integration.
+   H=sum(Phi*h); 
+   %Received Signal
+   y_k = H*Sel_symbol + w_k;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%ML Dedector %%%%%%%%%%%%%%%%%%%%%%%%%%
+ Metr=zeros(1,2^eta);
+ idx1=Metr;
+ idx2=Metr;
+ x=1;
+ for c1=1:Nr
+ Phi=diag(exp(-1i*angle(h(:,c1)))); 
+ HH=sum(Phi*h);
+ for c2=1:(const_sets*M)
+ Metr(x)=norm(y_k-HH*ss_qpsk_DM(c2))^2;                   
+ idx1(x)=c1;
+ idx2(x)=c2;
+ x=x+1;
+ end
+ end
+[x5,x6]=min(Metr); 
+a2 = idx1(x6);
+a4 = idx2(x6);
+% Estimation of antenna index 
+est_ant_idx=est_ant_Idx_bits(a2,:);
+% Decoding of Constellation Index and symbol.
+const_idx_symbol_Rx=est_const_Idx_symb_bits(a4,:);
+%Combine all bits to compute the BER. 
+est_bits(j:j+log2(Nr)+log2(const_sets)+log2(M)-1)=[est_ant_idx,const_idx_symbol_Rx];
+j=j+log2(Nr)+log2(const_sets)+log2(M); 
+  end      
+bit_errs=biterr(bit_seq,est_bits);
+ BER=bit_errs/total_bits
