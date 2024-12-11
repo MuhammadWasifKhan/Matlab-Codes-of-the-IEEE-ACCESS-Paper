@@ -1,0 +1,14 @@
+clc;close all;clear all;
+X1=[-3,-3,-1,-1,3, 3,1, 1];
+Y1=[ 1,-1, 1,-1,1,-1,1,-1];
+X2=[-5,-5,-3,-3,5, 5,3, 3];
+Y2=[ 3,-3, 3,-3,3,-3,3,-3];
+QAM1 = X1(:) + 1j*Y1(:);
+QAM2 = X2(:) + 1j*Y2(:);
+
+plot(QAM1,'+','LineWidth', 2,'Color', 'r')
+hold on
+plot(QAM2,'o','LineWidth', 2,'Color', 'b')
+legend('Constellation Set I','Constellation Set II')
+grid on
+axis([-5 5 -3 3])
